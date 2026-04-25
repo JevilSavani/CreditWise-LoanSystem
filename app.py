@@ -141,17 +141,6 @@ def main():
     st.markdown("### AI-Powered Loan Approval Prediction")
     st.markdown("---")
 
-    model = load_model()
-    df = load_training_data()
-
-    if model is None:
-        st.error("Failed to load model.")
-        return
-
-    if df is None:
-        st.error("Failed to load training data.")
-        return
-
     st.sidebar.header("Application Details")
     st.sidebar.info("Fill in the details to check your loan approval status")
 
@@ -206,6 +195,12 @@ def main():
 
     if st.button("Predict Loan Approval", type="primary", use_container_width=True):
         try:
+            model = load_model()
+
+            if model is None:
+                st.error("Failed to load model.")
+                return
+
             if hasattr(model, "feature_names_in_"):
                 expected_cols = model.feature_names_in_.tolist()
             else:
