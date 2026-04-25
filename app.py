@@ -1,6 +1,8 @@
 """
 CreditWise Loan Approval Prediction App
 Streamlit Application for Loan Detection System
+==============================================
+Fixed version for Streamlit Cloud deployment
 """
 
 import streamlit as st
@@ -8,28 +10,103 @@ import pandas as pd
 import pickle
 import os
 
-# Page Configuration
+# ============================================
+# PAGE CONFIGURATION
+# ============================================
 st.set_page_config(
     page_title="CreditWise - Loan Approval Prediction",
     page_icon="🏦",
     layout="centered"
 )
 
-# Load the trained model pipeline
+# ============================================
+# SAFE MODEL LOADING (works locally & cloud)
+# ============================================
 @st.cache_resource
 def load_model():
-    """Load the trained model pipeline"""
-    model_path = os.path.join(os.path.dirname(__file__), 'pipeline.pkl')
-    with open(model_path, 'rb') as f:
-        return pickle.load(f)
+    """
+    Load the trained model pipeline safely.
+    Uses multiple path strategies for deployment compatibility.
+    """
+    # Try different possible locations
+    possible_paths = [
+        'pipeline.pkl',
+        os.path.join(os.path.dirname(__file__), 'pipeline.pkl'),
+        os.path.join(os.path.dirname(__file__), '..', 'pipeline.pkl'),
+    ]
+    
+    for model_path in possible_paths:
+        try:
+            if os.path.exists(model_path):
+                with open(model_path, 'rb') as f:
+                    st.write(f"✅ Model loaded from: {model_path}")
+                    return pickle.load(f)
+        except Exception as e:
+            continue
+    
+    # If all paths fail, show error
+    st.error(f"❌ Could not find pipeline.pkl in any location")
+    st.write("Tried paths:", possible_paths)
+    return None
 
-# Load the data to get feature information
+# ============================================
+# SAFE DATA LOADING
+# ============================================
 @st.cache_data
-def load_data_info():
-    """Load sample data to understand feature categories"""
-    df = pd.read_csv(os.path.join(os.path.dirname(__file__), 'loan_approval_data.csv'))
-    return df
+def load_training_data():
+    """
+    Load sample data to understand feature columns.
+    """
+    possible_paths = [
+        'loan_approval_data.csv',
+        os.path.join(os.path.dirname(__file__), 'loan_approval_data.csv'),
+    ]
+    
+    for data_path in possible_paths:
+        try:
+            if os.path.exists(data_path):
+                return pd.read_csv(data_path)
+        except Exception as e:
+            continue
+    
+    return None
 
+# ============================================
+# GET FEATURE COLUMNS FROM MODEL
+# ============================================
+def get_feature_columns(model, df):
+    """
+    Extract the expected feature columns from the model pipeline.
+    This ensures we send the right columns to the model.
+    """
+    try:
+        # Get the preprocessor from the pipeline
+        preprocessor = model.named_steps['preprocess']
+        
+        # Get feature names after transformation
+        try:
+            feature_names = preprocessor.get_feature_names_out()
+        except AttributeError:
+            # Fallback for older sklearn versions
+            # Get transformer names
+            feature_names = []
+            for name, transformer, columns in preprocessor.transformers_:
+                if hasattr(transformer, 'get_feature_names_out'):
+                    try:
+                        names = transformer.get_feature_names_out()
+                        feature_names.extend(names)
+                    except:
+                        feature_names.extend(columns)
+        
+        return list(feature_names)
+    except Exception as e:
+        st.warning(f"Could not extract feature names: {e}")
+        # Return original columns as fallback
+        return df.columns.tolist() if df is not None else []
+
+# ============================================
+# MAIN APPLICATION
+# ============================================
 def main():
     """Main Streamlit application"""
     
@@ -39,25 +116,40 @@ def main():
     st.markdown("---")
     
     # Load model and data
-    try:
-        model = load_model()
-        df = load_data_info()
-    except Exception as e:
-        st.error(f"Error loading model: {str(e)}")
+    model = load_model()
+    df = load_training_data()
+    
+    if model is None:
+        st.error("🚫 Failed to load model. Please check deployment.")
+        st.info("Make sure pipeline.pkl is in the repository root.")
         return
     
     # Sidebar
     st.sidebar.header("📋 Application Details")
     st.sidebar.info("Fill in the details to check your loan approval status")
     
-    # Get unique values for categorical features
-    employment_status = ['Salaried', 'Self-employed', 'Unemployed']
-    marital_status = ['Married', 'Single']
-    property_area = ['Urban', 'Semiurban', 'Rural']
-    employer_category = ['Private', 'Government', 'Self-employed', 'Other']
-    gender = ['Male', 'Female']
-    loan_purpose = ['Personal', 'Home', 'Car', 'Business', 'Education']
-    education_level = ['Graduate', 'Not Graduate']
+    # ============================================
+    # INPUT FORM - ALL FEATURES
+    # ============================================
+    
+    # Get unique values for categorical features from data if available
+    if df is not None:
+        employment_status = df['Employment_Status'].dropna().unique().tolist() if 'Employment_Status' in df.columns else ['Salaried', 'Self-employed', 'Unemployed']
+        marital_status = df['Marital_Status'].dropna().unique().tolist() if 'Marital_Status' in df.columns else ['Married', 'Single']
+        property_area = df['Property_Area'].dropna().unique().tolist() if 'Property_Area' in df.columns else ['Urban', 'Semiurban', 'Rural']
+        employer_category = df['Employer_Category'].dropna().unique().tolist() if 'Employer_Category' in df.columns else ['Private', 'Government', 'Self-employed', 'Other']
+        gender = df['Gender'].dropna().unique().tolist() if 'Gender' in df.columns else ['Male', 'Female']
+        loan_purpose = df['Loan_Purpose'].dropna().unique().tolist() if 'Loan_Purpose' in df.columns else ['Personal', 'Home', 'Car', 'Business', 'Education']
+        education_level = df['Education_Level'].dropna().unique().tolist() if 'Education_Level' in df.columns else ['Graduate', 'Not Graduate']
+    else:
+        # Default values
+        employment_status = ['Salaried', 'Self-employed', 'Unemployed']
+        marital_status = ['Married', 'Single']
+        property_area = ['Urban', 'Semiurban', 'Rural']
+        employer_category = ['Private', 'Government', 'Self-employed', 'Other']
+        gender = ['Male', 'Female']
+        loan_purpose = ['Personal', 'Home', 'Car', 'Business', 'Education']
+        education_level = ['Graduate', 'Not Graduate']
     
     # Create input form
     st.markdown("### 👤 Applicant Information")
@@ -210,63 +302,58 @@ def main():
             help="Purpose of the loan"
         )
     
-    # Prediction button
+    # ============================================
+    # PREDICTION
+    # ============================================
     st.markdown("---")
     
     if st.button("🔮 Predict Loan Approval", type="primary", use_container_width=True):
-        # Create input dataframe matching training data format
-        input_data = pd.DataFrame({
-            'Applicant_Income': [applicant_income],
-            'Coapplicant_Income': [coapplicant_income],
-            'Employment_Status': [employment_status_select],
-            'Age': [age],
-            'Marital_Status': [marital_status_select],
-            'Dependents': [dependents],
-            'Credit_Score': [credit_score],
-            'Existing_Loans': [existing_loans],
-            'DTI_Ratio': [dti_ratio],
-            'Savings': [savings],
-            'Collateral_Value': [collateral_value],
-            'Loan_Amount': [loan_amount],
-            'Loan_Term': [loan_term],
-            'Loan_Purpose': [loan_purpose_select],
-            'Property_Area': [property_area_select],
-            'Education_Level': [education_level_select],
-            'Gender': [gender_select],
-            'Employer_Category': [employer_category_select]
-        })
-        
         try:
-            # Ensure input_data matches model's expected columns after encoding
-            preprocess = model.named_steps['preprocess']
-            try:
-                expected_cols = preprocess.get_feature_names_out()
-            except Exception:
-                # Fallback for older sklearn versions
-                expected_cols = preprocess.transformers_[1][1].named_steps['encoder'].get_feature_names_out()
-
-            for col in expected_cols:
-                if col not in input_data.columns:
-                    input_data[col] = 0
-            input_data = input_data.reindex(columns=expected_cols, fill_value=0)
-
-            # Make prediction
+            # Create input dataframe with RAW columns (no encoding!)
+            # The pipeline will handle encoding internally
+            input_data = pd.DataFrame({
+                'Applicant_Income': [applicant_income],
+                'Coapplicant_Income': [coapplicant_income],
+                'Employment_Status': [employment_status_select],
+                'Age': [age],
+                'Marital_Status': [marital_status_select],
+                'Dependents': [dependents],
+                'Credit_Score': [credit_score],
+                'Existing_Loans': [existing_loans],
+                'DTI_Ratio': [dti_ratio],
+                'Savings': [savings],
+                'Collateral_Value': [collateral_value],
+                'Loan_Amount': [loan_amount],
+                'Loan_Term': [loan_term],
+                'Loan_Purpose': [loan_purpose_select],
+                'Property_Area': [property_area_select],
+                'Education_Level': [education_level_select],
+                'Gender': [gender_select],
+                'Employer_Category': [employer_category_select]
+            })
+            
+            # Debug: Show input columns
+            with st.expander("🔍 Debug: Input Data"):
+                st.write("Input columns:", input_data.columns.tolist())
+                st.write("Input data:", input_data)
+            
+            # Make prediction - pipeline handles ALL preprocessing
             prediction = model.predict(input_data)
             prediction_proba = model.predict_proba(input_data)
-
+            
             # Display results
             st.markdown("### 📊 Prediction Result")
-
+            
             if prediction[0] == 1:
                 st.success("✅ Congratulations! Your loan is likely to be APPROVED!")
                 st.balloons()
             else:
                 st.error("❌ Sorry, your loan application is likely to be REJECTED.")
-
+            
             # Show confidence
             confidence = prediction_proba[0][prediction[0]] * 100
             st.markdown(f"**Confidence Level:** {confidence:.2f}%")
-
+            
             # Show probability breakdown
             st.markdown("#### Probability Breakdown:")
             prob_df = pd.DataFrame({
@@ -274,10 +361,12 @@ def main():
                 'Probability': [prediction_proba[0][0] * 100, prediction_proba[0][1] * 100]
             })
             st.bar_chart(prob_df.set_index('Status'))
-
+            
         except Exception as e:
             st.error(f"Error making prediction: {str(e)}")
+            st.write("---")
             st.write("Please check all input values and try again.")
+            st.write("If the problem persists, the model may need retraining.")
     
     # Footer
     st.markdown("---")
