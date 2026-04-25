@@ -193,7 +193,12 @@ def main():
 
     st.markdown("---")
 
-    if st.button("Predict Loan Approval", type="primary", use_container_width=True):
+    if st.button(
+        "Predict Loan Approval",
+        type="primary",
+        use_container_width=True,
+        key="predict_loan_approval_button",
+    ):
         try:
             model = load_model()
 
