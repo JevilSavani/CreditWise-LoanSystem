@@ -6,6 +6,7 @@ Streamlit Application for Loan Detection System
 import os
 import pickle
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -29,13 +30,32 @@ def load_model():
         try:
             if os.path.exists(model_path):
                 with open(model_path, "rb") as f:
-                    return pickle.load(f)
+                    model = pickle.load(f)
+                    repair_sklearn_imputers(model)
+                    return model
         except Exception as exc:
             st.error(f"Could not load {model_path}: {exc}")
             return None
 
     st.error("Could not find pipeline.pkl")
     return None
+
+
+def repair_sklearn_imputers(model):
+    """Add sklearn's newer imputer dtype attributes to older pickled models."""
+    for estimator in model.get_params(deep=True).values():
+        if estimator.__class__.__name__ != "SimpleImputer":
+            continue
+
+        statistics = getattr(estimator, "statistics_", None)
+        fallback_dtype = getattr(statistics, "dtype", np.dtype("float64"))
+        fit_dtype = getattr(estimator, "_fit_dtype", fallback_dtype)
+
+        if not hasattr(estimator, "_fit_dtype"):
+            estimator._fit_dtype = fit_dtype
+
+        if not hasattr(estimator, "_fill_dtype"):
+            estimator._fill_dtype = fit_dtype
 
 
 @st.cache_data
