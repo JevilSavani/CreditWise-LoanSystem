@@ -237,23 +237,36 @@ def main():
         })
         
         try:
+            # Ensure input_data matches model's expected columns after encoding
+            preprocess = model.named_steps['preprocess']
+            try:
+                expected_cols = preprocess.get_feature_names_out()
+            except Exception:
+                # Fallback for older sklearn versions
+                expected_cols = preprocess.transformers_[1][1].named_steps['encoder'].get_feature_names_out()
+
+            for col in expected_cols:
+                if col not in input_data.columns:
+                    input_data[col] = 0
+            input_data = input_data.reindex(columns=expected_cols, fill_value=0)
+
             # Make prediction
             prediction = model.predict(input_data)
             prediction_proba = model.predict_proba(input_data)
-            
+
             # Display results
             st.markdown("### 📊 Prediction Result")
-            
+
             if prediction[0] == 1:
                 st.success("✅ Congratulations! Your loan is likely to be APPROVED!")
                 st.balloons()
             else:
                 st.error("❌ Sorry, your loan application is likely to be REJECTED.")
-            
+
             # Show confidence
             confidence = prediction_proba[0][prediction[0]] * 100
             st.markdown(f"**Confidence Level:** {confidence:.2f}%")
-            
+
             # Show probability breakdown
             st.markdown("#### Probability Breakdown:")
             prob_df = pd.DataFrame({
@@ -261,7 +274,7 @@ def main():
                 'Probability': [prediction_proba[0][0] * 100, prediction_proba[0][1] * 100]
             })
             st.bar_chart(prob_df.set_index('Status'))
-            
+
         except Exception as e:
             st.error(f"Error making prediction: {str(e)}")
             st.write("Please check all input values and try again.")
