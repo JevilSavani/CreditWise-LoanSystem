@@ -310,7 +310,6 @@ def main():
     if st.button("🔮 Predict Loan Approval", type="primary", use_container_width=True):
         try:
             # Create input dataframe with RAW columns (no encoding!)
-            # The pipeline will handle encoding internally
             input_data = pd.DataFrame({
                 'Applicant_Income': [applicant_income],
                 'Coapplicant_Income': [coapplicant_income],
@@ -332,12 +331,33 @@ def main():
                 'Employer_Category': [employer_category_select]
             })
             
+            # ============================================
+            # FIX: Match model's expected columns exactly
+            # ============================================
+            # The model was trained on ONE-HOT ENCODED data
+            # We need to match the exact columns the model expects
+            
+            # Get the columns the model was trained on
+            if hasattr(model, 'feature_names_in_'):
+                expected_cols = model.feature_names_in_.tolist()
+            else:
+                # If no feature_names_in_, try to get from preprocessor
+                try:
+                    expected_cols = model.named_steps['preprocess'].get_feature_names_out()
+                except:
+                    st.error("Cannot determine expected columns. Please retrain the model.")
+                    return
+            
+            # Reindex input to match expected columns, fill missing with 0
+            input_data = input_data.reindex(columns=expected_cols, fill_value=0)
+            
             # Debug: Show input columns
             with st.expander("🔍 Debug: Input Data"):
+                st.write("Expected columns:", expected_cols)
                 st.write("Input columns:", input_data.columns.tolist())
                 st.write("Input data:", input_data)
             
-            # Make prediction - pipeline handles ALL preprocessing
+            # Make prediction
             prediction = model.predict(input_data)
             prediction_proba = model.predict_proba(input_data)
             
