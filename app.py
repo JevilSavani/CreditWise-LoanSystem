@@ -13,7 +13,6 @@ import streamlit as st
 
 st.set_page_config(
     page_title="CreditWise - Loan Approval Prediction",
-    page_icon="CW",
     layout="centered",
 )
 
@@ -43,7 +42,12 @@ def load_model():
 
 def repair_sklearn_imputers(model):
     """Add sklearn's newer imputer dtype attributes to older pickled models."""
-    for estimator in model.get_params(deep=True).values():
+    try:
+        estimators = model.get_params(deep=True).values()
+    except Exception:
+        return
+
+    for estimator in estimators:
         if estimator.__class__.__name__ != "SimpleImputer":
             continue
 
