@@ -87,14 +87,14 @@ def main():
     st.sidebar.header("📋 Application Details")
     st.sidebar.info("Fill in the details to check your loan approval status")
     
-    # Get unique values from training data
-    employment_status = df['Employment_Status'].dropna().unique().tolist() if 'Employment_Status' in df.columns else ['Salaried', 'Self-employed', 'Unemployed']
-    marital_status = df['Marital_Status'].dropna().unique().tolist() if 'Marital_Status' in df.columns else ['Married', 'Single']
-    property_area = df['Property_Area'].dropna().unique().tolist() if 'Property_Area' in df.columns else ['Urban', 'Semiurban', 'Rural']
-    employer_category = df['Employer_Category'].dropna().unique().tolist() if 'Employer_Category' in df.columns else ['Private', 'Government', 'Self-employed', 'Other']
-    gender = df['Gender'].dropna().unique().tolist() if 'Gender' in df.columns else ['Male', 'Female']
-    loan_purpose = df['Loan_Purpose'].dropna().unique().tolist() if 'Loan_Purpose' in df.columns else ['Personal', 'Home', 'Car', 'Business', 'Education']
-    education_level = df['Education_Level'].dropna().unique().tolist() if 'Education_Level' in df.columns else ['Graduate', 'Not Graduate']
+    # Get unique values from training data (exact values from the data)
+    employment_status = ['Salaried', 'Self-employed', 'Contract', 'Unemployed']
+    marital_status = ['Married', 'Single']
+    property_area = ['Urban', 'Semiurban', 'Rural']
+    employer_category = ['Private', 'Government', 'Unemployed', 'MNC', 'Business']
+    gender = ['Female', 'Male']
+    loan_purpose = ['Personal', 'Car', 'Business', 'Home', 'Education']
+    education_level = ['Not Graduate', 'Graduate']
     
     # ============================================
     # INPUT FORM
@@ -170,6 +170,11 @@ def main():
                 'Employer_Category': [employer_category_select]
             })
             
+            # FIX: Education_Level must be label encoded (0=Graduate, 1=Not Graduate)
+            # The model was trained with Education_Level as numeric
+            education_mapping = {'Graduate': 0, 'Not Graduate': 1}
+            input_data['Education_Level'] = input_data['Education_Level'].map(education_mapping)
+            
             # Get expected columns from model and reindex
             if hasattr(model, 'feature_names_in_'):
                 expected_cols = model.feature_names_in_.tolist()
@@ -183,6 +188,7 @@ def main():
             # Debug info
             with st.expander("🔍 Debug: Input Data"):
                 st.write("Input shape:", input_data.shape)
+                st.write("Input columns:", input_data.columns.tolist())
                 st.write("Input data:", input_data)
             
             # Make prediction
